@@ -16,8 +16,8 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:560px;margin:0 auto;padding:16px 16px 40px}
 h1{font-size:20px;margin:4px 0 12px}h2{font-size:17px;margin:0 0 8px}h3{font-size:15px;margin:14px 0 4px}
-nav{display:flex;gap:6px;margin-bottom:16px}
-nav button{flex:1;padding:10px 2px;border:1px solid var(--line);background:var(--surf);color:var(--ink);border-radius:8px;font:inherit;font-size:14px;font-weight:600}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+nav button{flex:1 1 30%;padding:10px 2px;border:1px solid var(--line);background:var(--surf);color:var(--ink);border-radius:8px;font:inherit;font-size:14px;font-weight:600}
 nav button[aria-current="true"]{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
 .card{background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
 label{display:block;font-size:14px;color:var(--mute);margin:10px 0 4px}
@@ -45,6 +45,22 @@ details{margin-top:6px}summary{cursor:pointer;font-weight:600;padding:6px 0}
 textarea{min-height:200px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
 .ck{display:flex;align-items:center;gap:10px;margin:10px 0}.ck input{width:auto}
 textarea.sc{min-height:90px}
+
+:root{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300}}
+:root[data-theme="dark"]{--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300}
+.tb{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.tb th,.tb td{padding:7px 4px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
+.tb th{color:var(--mute);font-weight:600;border-top:0}.tb th:first-child,.tb td:first-child{text-align:left}
+.sx{overflow-x:auto}
+.wrap{position:relative;margin-top:12px}
+.tip{position:absolute;top:0;width:170px;font-size:12px;line-height:1.35;white-space:nowrap;background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:6px 8px;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:baseline}
+.lgs{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0;font-size:14px}.lg{white-space:nowrap}
+.hb{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px;font-variant-numeric:tabular-nums}
+.hl{width:78px;flex:none;color:var(--mute)}.ht{flex:1;height:16px}
+.hf{display:block;height:100%;min-width:0;background:var(--s1);border-radius:0 4px 4px 0}
+.hn{width:70px;flex:none;text-align:right}
 #lock{position:fixed;inset:0;z-index:50;background:#000;color:#9fb8a4;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;touch-action:none;user-select:none}
 #lock .lt{font-size:30px;font-weight:700}
 </style>
@@ -96,10 +112,10 @@ function cur(){
 
 /* ---------- Navigation ---------- */
 function nav(){
-  const T=[['messen','Messen'],['versuche','Versuche'],['export','Export'],['einst','Einstellungen']];
+  const T=[['messen','Messen'],['versuche','Versuche'],['ausw','Auswertung'],['export','Export'],['einst','Einstellungen']];
   $('#nav').innerHTML=T.map(([k,l])=>`<button data-tab="${k}" aria-current="${tab===k}">${l}</button>`).join('');
 }
-function show(t){tab=t;nav();({messen:vMessen,versuche:vVersuche,export:vExport,einst:vEinst})[t]()}
+function show(t){tab=t;nav();({messen:vMessen,versuche:vVersuche,export:vExport,einst:vEinst,ausw:vAusw})[t]()}
 
 /* ---------- Versuche ---------- */
 function planTxt(t){const p=t.plan||[];if(!p.length)return 'fehlt noch';return `${p.length} Bäume je Variante · je ${p[0].n} Früchte`}
@@ -222,6 +238,115 @@ async function setLock(on){
   const i=$('#inp');if(i&&!i.disabled)i.focus();
 }
 
+/* ---------- Auswertung ---------- */
+let A={t:null,art:null,run:null,mode:'mean',vsel:'*'},CH=null;
+const mn=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const sd=a=>a.length>1?Math.sqrt(a.reduce((s,x)=>s+(x-mn(a))**2,0)/(a.length-1)):null;
+const fnum=v=>String(+(+v).toFixed(2)).replace('.',',');
+const fd=ts=>new Date(ts).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit'});
+const fdl=ts=>new Date(ts).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'});
+const SCOL=i=>`var(--s${i+1})`;
+function aRuns(t,art){
+  return S.runs.filter(r=>r.t===t.id&&r.art===art).map(r=>{const ms=S.ms.filter(m=>m.run===r.id&&m.art===art);
+    return ms.length?{r,ms,ts:ms.map(m=>m.ts).sort()[0]}:null}).filter(Boolean).sort((a,b)=>a.ts<b.ts?-1:1)}
+const rvals=(x,v)=>x.ms.filter(m=>m.v===v.id).map(m=>m.val);
+function ticks(lo,hi,n){const span=(hi-lo)||1,raw=span/n,p=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/p,st=(f<=1?1:f<=2?2:f<=5?5:10)*p;
+  const a=Math.floor(lo/st+1e-9)*st,b=Math.ceil(hi/st-1e-9)*st,r=[];for(let v=a;v<=b+st/2;v+=st)r.push(+v.toFixed(10));return r}
+function chart(slots,series,fmtv,unit){
+  const W=360,H=230,l=40,r=series.length<=4?66:14,t=18,b=26,pw=W-l-r,ph=H-t-b;
+  const all=series.flatMap(s=>s.vals).filter(v=>v!=null);
+  if(!all.length)return '<p class="mute">Keine Werte für das Diagramm.</p>';
+  let lo=Math.min(...all),hi=Math.max(...all);if(S_growth())lo=Math.min(lo,0),hi=Math.max(hi,0);
+  const tk=ticks(lo,hi,4),y0=tk[0],y1=tk[tk.length-1],py=v=>t+ph-(v-y0)/(y1-y0||1)*ph;
+  const x0=Math.min(...slots.map(s=>s.ts)),x1=Math.max(...slots.map(s=>s.ts)),px=ts=>l+(x1===x0?.5:(ts-x0)/(x1-x0))*pw;
+  let g=`<text x="${l}" y="9" font-size="10" fill="var(--mute)">${unit}</text>`;
+  tk.forEach(v=>{g+=`<line x1="${l}" x2="${W-r}" y1="${py(v)}" y2="${py(v)}" stroke="var(--line)" stroke-width="1"/><text x="${l-6}" y="${py(v)+3.5}" text-anchor="end" font-size="10" fill="var(--mute)">${fnum(v)}</text>`});
+  const step=Math.ceil(slots.length/5);
+  slots.forEach((s,i)=>{if(i%step===0||i===slots.length-1)g+=`<text x="${px(s.ts)}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--mute)">${fd(s.ts)}</text>`});
+  const ends=[];
+  series.forEach(s=>{
+    let seg=[];const flush=()=>{if(seg.length>1)g+=`<path d="M${seg.map(p=>p.join(' ')).join(' L')}" fill="none" stroke="${SCOL(s.i)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;seg=[]};
+    s.vals.forEach((v,k)=>{if(v==null){flush();return}seg.push([px(slots[k].ts),py(v)])});flush();
+    s.vals.forEach((v,k)=>{if(v!=null)g+=`<circle cx="${px(slots[k].ts)}" cy="${py(v)}" r="4" fill="${SCOL(s.i)}" stroke="var(--surf)" stroke-width="2"/>`});
+    let k=s.vals.length-1;while(k>=0&&s.vals[k]==null)k--;if(k>=0)ends.push({s,x:px(slots[k].ts),y:py(s.vals[k])});
+  });
+  if(series.length<=4){ends.sort((a,b)=>a.y-b.y);let last=-99;ends.forEach(e=>{e.ly=Math.max(e.y,last+12);last=e.ly;
+    const nm=e.s.name.length>9?e.s.name.slice(0,8)+'…':e.s.name;g+=`<text x="${e.x+8}" y="${e.ly+3.5}" font-size="10.5" fill="var(--ink)">${esc(nm)}</text>`})}
+  CH={W,px:slots.map(s=>px(s.ts)),lab:slots.map(s=>fdl(s.ts)),rows:slots.map((s,k)=>series.filter(q=>q.vals[k]!=null).map(q=>[q.name,fmtv(q.vals[k]),SCOL(q.i)]))};
+  return `<div class="wrap"><svg id="ch" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Liniendiagramm der Varianten" style="touch-action:pan-y"><g>${g}</g><line id="chx" y1="${t}" y2="${t+ph}" stroke="var(--mute)" stroke-width="1" style="visibility:hidden"/></svg><div id="tip" class="tip" hidden></div></div>`;
+}
+const S_growth=()=>A.mode==='growth';
+function chHover(e){const svg=e.target.closest&&e.target.closest('#ch');if(!svg||!CH)return;
+  const b=svg.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*CH.W;let k=0,d=1e9;
+  CH.px.forEach((p,i)=>{if(Math.abs(p-x)<d){d=Math.abs(p-x);k=i}});
+  const tip=$('#tip'),cx=$('#chx');cx.setAttribute('x1',CH.px[k]);cx.setAttribute('x2',CH.px[k]);cx.style.visibility='visible';
+  tip.innerHTML=`<b>${CH.lab[k]}</b>`+CH.rows[k].map(r=>`<div><span class="dot" style="background:${r[2]}"></span>${esc(r[0])}: <b>${r[1]}</b></div>`).join('');
+  tip.hidden=false;const wb=svg.parentElement.getBoundingClientRect(),left=(b.left-wb.left)+CH.px[k]/CH.W*b.width;
+  tip.style.left=Math.max(0,Math.min(left-75,wb.width-175))+'px'}
+function vAusw(){
+  const ts=S.trials.filter(t=>ARTEN.some(a=>aRuns(t,a).length));
+  if(!ts.length){$('#view').innerHTML=`<div class="card"><h2>Noch keine Messungen</h2><p class="mute">Sobald du einen Durchgang gemessen hast, erscheint hier die Auswertung.</p></div>`;return}
+  if(!ts.some(t=>t.id===A.t))A.t=ts[0].id;
+  const t=S.trials.find(x=>x.id===A.t),arts=ARTEN.filter(a=>aRuns(t,a).length);
+  if(!arts.includes(A.art))A.art=arts[0];
+  const runs=aRuns(t,A.art);
+  if(!runs.some(x=>x.r.id===A.run))A.run=runs[runs.length-1].r.id;
+  const cr=runs.find(x=>x.r.id===A.run),cap=t.variants.slice(0,6);
+  const opt=(arr,cur,f)=>arr.map(x=>`<option value="${f[0](x)}"${f[0](x)===cur?' selected':''}>${f[1](x)}</option>`).join('');
+  // Kennzahlen
+  const rows=t.variants.map(v=>{const a=rvals(cr,v);return a.length?`<tr><td>${esc(v.name)}</td><td>${a.length}</td><td><b>${fnum(mn(a))}</b></td><td>${sd(a)==null?'–':fnum(sd(a))}</td><td>${fnum(Math.min(...a))}</td><td>${fnum(Math.max(...a))}</td></tr>`:`<tr><td>${esc(v.name)}</td><td colspan="5" class="mute">keine Messung</td></tr>`}).join('');
+  // Verlauf
+  const growth=S_growth();
+  const slots=(growth?runs.slice(1):runs).map(x=>({ts:Date.parse(x.ts),x}));
+  const series=cap.map((v,i)=>{
+    const m=runs.map(x=>{const a=rvals(x,v);return a.length?mn(a):null});
+    let vals;
+    if(!growth)vals=m;else vals=runs.slice(1).map((x,k)=>{const d=(Date.parse(x.ts)-Date.parse(runs[k].ts))/864e5;return (m[k]!=null&&m[k+1]!=null&&d>=1)?(m[k+1]-m[k])/d*7:null});
+    return {name:v.name,i,vals}}).filter(s=>s.vals.some(v=>v!=null));
+  const fv=growth?(v=>(v>=0?'+':'')+fnum(v)+' mm'):(v=>fnum(v)+' mm');
+  let verlauf;
+  if(!slots.length)verlauf='<p class="mute">Für das Wachstum braucht es mindestens zwei Messtermine.</p>';
+  else if(!series.length)verlauf='<p class="mute">Zu wenig Werte. Wachstum wird nur zwischen Terminen berechnet, die mindestens einen Tag auseinanderliegen.</p>';
+  else{
+    const leg=series.map(s=>`<span class="lg"><span class="dot" style="background:${SCOL(s.i)}"></span>${esc(s.name)}</span>`).join('');
+    const th=series.map(s=>`<th>${esc(s.name)}</th>`).join('');
+    const tr=slots.map((s,k)=>`<tr><td>${fd(s.ts)}</td>${series.map(q=>`<td>${q.vals[k]==null?'–':(growth&&q.vals[k]>=0?'+':'')+fnum(q.vals[k])}</td>`).join('')}</tr>`).join('');
+    verlauf=chart(slots,series,fv,growth?'mm je 7 Tage':'mm')+`<div class="lgs">${leg}</div>${t.variants.length>6?'<p class="mute">Die Grafik zeigt die ersten 6 Varianten.</p>':''}
+      <details><summary>Werte als Tabelle (${growth?'mm je 7 Tage':'Mittelwert in mm'})</summary><div class="sx"><table class="tb"><thead><tr><th>Datum</th>${th}</tr></thead><tbody>${tr}</tbody></table></div></details>`;
+  }
+  // Verteilung
+  const w=+S.cfg.cls>0?+S.cfg.cls:5;
+  const vv=t.variants.some(v=>v.id===A.vsel)?A.vsel:'*';
+  const dv=cr.ms.filter(m=>vv==='*'||m.v===vv).map(m=>m.val);
+  let dist='<p class="mute">Keine Messungen.</p>';
+  if(dv.length){
+    const lo=Math.floor(Math.min(...dv)/w)*w,nb=Math.floor((Math.max(...dv)-lo)/w)+1;
+    if(nb>80)dist='<p class="mute">Zu viele Klassen. Bitte die Klassenbreite erhöhen.</p>';
+    else{const c=Array(nb).fill(0);dv.forEach(x=>c[Math.floor((x-lo)/w)]++);const mx=Math.max(...c);
+      dist=c.map((n,i)=>`<div class="hb"><span class="hl">${fnum(lo+i*w)}–${fnum(lo+(i+1)*w)}</span><span class="ht"><span class="hf" style="width:${n/mx*100}%"></span></span><span class="hn">${n}${n?` · ${Math.round(n/dv.length*100)} %`:''}</span></div>`).join('')}
+  }
+  $('#view').innerHTML=`<div class="card"><label for="at" style="margin-top:0">Versuch</label><select id="at">${opt(ts,A.t,[x=>x.id,x=>esc(x.betrieb)+': '+esc(x.name)])}</select>
+    <label for="aa">Messart</label><select id="aa">${opt(arts,A.art,[x=>x,x=>x])}</select></div>
+  <div class="card"><h2>Kennzahlen</h2><label for="ar" style="margin-top:0">Messtermin</label><select id="ar">${opt(runs,A.run,[x=>x.r.id,x=>fdl(x.ts)+(x.r.person?' · '+esc(x.r.person):'')+' · '+x.ms.length+' Messungen'])}</select>
+    <div class="sx"><table class="tb"><thead><tr><th>Variante</th><th>n</th><th>Mittel</th><th>±</th><th>Min</th><th>Max</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="mute">Werte in mm. ± ist die Standardabweichung.</p></div>
+  <div class="card"><h2>Verlauf</h2><div class="tg"><button class="b ${growth?'g':''}" data-amode="mean" aria-pressed="${!growth}">Mittelwert</button><button class="b ${growth?'':'g'}" data-amode="growth" aria-pressed="${growth}">Wachstum je 7 Tage</button></div>${verlauf}</div>
+  <div class="card"><h2>Verteilung</h2><p class="mute">Für den oben gewählten Messtermin.</p>
+    <div class="row"><div><label for="av">Variante</label><select id="av"><option value="*"${vv==='*'?' selected':''}>Alle zusammen</option>${opt(t.variants,vv,[x=>x.id,x=>esc(x.name)])}</select></div>
+    <div><label for="ac">Klassenbreite (mm)</label><input id="ac" type="number" inputmode="decimal" min="0.5" step="0.5" value="${w}"></div></div><div style="margin-top:10px">${dist}</div></div>`;
+}
+document.addEventListener('change',e=>{const t=e.target,id=t.id;
+  if(tab!=='ausw')return;
+  if(id==='at'){A.t=t.value;A.art=null;A.run=null;A.vsel='*'}
+  else if(id==='aa'){A.art=t.value;A.run=null}
+  else if(id==='ar')A.run=t.value;
+  else if(id==='av')A.vsel=t.value;
+  else if(id==='ac'){const n=parseFloat(String(t.value).replace(',','.'));if(n>0){S.cfg.cls=n;save()}}
+  else return;
+  vAusw()});
+document.addEventListener('click',e=>{const el=e.target.closest('button');if(el&&el.dataset.amode){A.mode=el.dataset.amode;vAusw()}});
+document.addEventListener('pointermove',chHover);document.addEventListener('pointerdown',chHover);
+
 /* ---------- Export ---------- */
 function csv(){
   const rows=['Datum;Uhrzeit;Person;Betrieb;Versuch;Versuch_ID;Parzelle;Sorte;Variante;Durchgang;Durchgang_ID;Baum;Frucht;Messart;Wert_mm'];
@@ -241,7 +366,7 @@ function vExport(){
 
 /* ---------- Einstellungen ---------- */
 function vEinst(){
-  $('#view').innerHTML=`<div class="card"><h2>Gerät und Person</h2><label for="cp">Wer misst mit diesem Gerät?</label><input id="cp" value="${esc(S.cfg.person||'')}" placeholder="z. B. Andre"><p class="mute">Der Name wird bei jeder Messung gespeichert und steht im Export.</p><p class="mute">App-Version 6</p></div>
+  $('#view').innerHTML=`<div class="card"><h2>Gerät und Person</h2><label for="cp">Wer misst mit diesem Gerät?</label><input id="cp" value="${esc(S.cfg.person||'')}" placeholder="z. B. Andre"><p class="mute">Der Name wird bei jeder Messung gespeichert und steht im Export.</p><p class="mute">App-Version 7</p></div>
     <div class="card"><h2>Rückmeldung</h2>
     <label class="ck"><input type="checkbox" id="cs"${S.cfg.sound?' checked':''}> Ton zur Bestätigung</label>
     <label class="ck"><input type="checkbox" id="cv"${S.cfg.vib?' checked':''}> Vibration (wenn vom Gerät unterstützt)</label></div>
