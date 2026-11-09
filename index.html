@@ -52,6 +52,7 @@ textarea.sc{min-height:90px}
 .tb{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
 .tb th,.tb td{padding:7px 4px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
 .tb th{color:var(--mute);font-weight:600;border-top:0}.tb th:first-child,.tb td:first-child{text-align:left}
+.tb td:first-child{white-space:normal;overflow-wrap:anywhere;max-width:105px}
 .sx{overflow-x:auto}
 .wrap{position:relative;margin-top:12px}
 .tip{position:absolute;top:0;width:170px;font-size:12px;line-height:1.35;white-space:nowrap;background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:6px 8px;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.15)}
@@ -347,6 +348,33 @@ document.addEventListener('change',e=>{const t=e.target,id=t.id;
 document.addEventListener('click',e=>{const el=e.target.closest('button');if(el&&el.dataset.amode){A.mode=el.dataset.amode;vAusw()}});
 document.addEventListener('pointermove',chHover);document.addEventListener('pointerdown',chHover);
 
+/* ---------- Testdaten ---------- */
+function tdRemove(){const ids=S.runs.filter(r=>S.trials.some(t=>t.id===r.t&&t.demo)).map(r=>r.id);
+  S.ms=S.ms.filter(m=>!ids.includes(m.run));S.runs=S.runs.filter(r=>!ids.includes(r.id));S.trials=S.trials.filter(t=>!t.demo);
+  if(!S.trials.some(t=>t.id===S.sel.t)){S.sel.t=null;S.sel.run=null;S.sel.pos=null}}
+function tdLoad(){
+  tdRemove();
+  let seed=12345;const rnd=()=>{seed=(seed*1664525+1013904223)%4294967296;return seed/4294967296};
+  const gauss=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+  const names=['Kontrolle','Tropfbewässerung','Mulch','Reduziert','Stress'],fac=[1,1.08,1.04,.93,.8];
+  const t={id:'demo-wasser',demo:true,betrieb:'Testhof',name:'Wasserprojekt (Testdaten)',parzelle:'Test',sorte:'Gala',plan:[1,2,3,4].map(i=>({tree:i,n:10})),variants:names.map((n,i)=>({id:'demo-v'+i,name:n}))};
+  S.trials.push(t);
+  const off=t.variants.map(()=>t.plan.map(()=>gauss()*1.2));
+  const today=new Date();today.setHours(10,0,0,0);
+  [28,21,14,7,0].forEach((back,k)=>{
+    const d0=new Date(today.getTime()-back*864e5),r={id:'demo-r'+k,t:t.id,art:'Fruchtdurchmesser',person:'Test',ts:d0.toISOString()};S.runs.push(r);
+    const day=28-back;let n=0;
+    t.variants.forEach((v,vi)=>{t.plan.forEach((p,pi)=>{const treeOff=off[vi][pi];for(let f=1;f<=p.n;f++){
+      const val=32+fac[vi]*(day*0.55-day*day*0.004)+treeOff+gauss()*1.6;
+      S.ms.push({id:'demo-'+k+'-'+vi+'-'+p.tree+'-'+f,run:r.id,v:v.id,tree:p.tree,fruit:f,art:r.art,val:Math.round(val*100)/100,person:'Test',ts:new Date(d0.getTime()+(n++)*20000).toISOString()})}})});
+  });
+  S.sel.t=t.id;S.sel.art='Fruchtdurchmesser';S.sel.run='demo-r4';S.sel.pos=null;A.t=t.id;A.art='Fruchtdurchmesser';A.run='demo-r4';A.vsel='*';
+  save();
+}
+document.addEventListener('click',e=>{const el=e.target.closest('button');if(!el)return;
+  if(el.id==='tdLoad'){tdLoad();show('ausw')}
+  else if(el.id==='tdDel'){tdRemove();A.t=null;A.run=null;save();vEinst();const m=$('#tdMsg');if(m)m.textContent='Testdaten entfernt.'}});
+
 /* ---------- Export ---------- */
 function csv(){
   const rows=['Datum;Uhrzeit;Person;Betrieb;Versuch;Versuch_ID;Parzelle;Sorte;Variante;Durchgang;Durchgang_ID;Baum;Frucht;Messart;Wert_mm'];
@@ -366,7 +394,9 @@ function vExport(){
 
 /* ---------- Einstellungen ---------- */
 function vEinst(){
-  $('#view').innerHTML=`<div class="card"><h2>Gerät und Person</h2><label for="cp">Wer misst mit diesem Gerät?</label><input id="cp" value="${esc(S.cfg.person||'')}" placeholder="z. B. Andre"><p class="mute">Der Name wird bei jeder Messung gespeichert und steht im Export.</p><p class="mute">App-Version 7</p></div>
+  $('#view').innerHTML=`<div class="card"><h2>Gerät und Person</h2><label for="cp">Wer misst mit diesem Gerät?</label><input id="cp" value="${esc(S.cfg.person||'')}" placeholder="z. B. Andre"><p class="mute">Der Name wird bei jeder Messung gespeichert und steht im Export.</p><p class="mute">App-Version 8</p></div>
+    <div class="card"><h2>Testdaten</h2><p class="mute">Legt einen Beispielversuch „Wasserprojekt (Testdaten)“ mit 5 Varianten und 5 wöchentlichen Messterminen der letzten 4 Wochen an, um Auswertung und Verlauf auszuprobieren. Die Daten erscheinen auch im Export, entferne sie danach wieder.</p>
+    <div class="tg"><button class="b" id="tdLoad">Testdaten laden</button><button class="b g" id="tdDel">Testdaten entfernen</button></div><p class="mute" id="tdMsg"></p></div>
     <div class="card"><h2>Rückmeldung</h2>
     <label class="ck"><input type="checkbox" id="cs"${S.cfg.sound?' checked':''}> Ton zur Bestätigung</label>
     <label class="ck"><input type="checkbox" id="cv"${S.cfg.vib?' checked':''}> Vibration (wenn vom Gerät unterstützt)</label></div>
